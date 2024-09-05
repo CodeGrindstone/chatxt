@@ -14,13 +14,13 @@ typora-copy-images-to: ./Images
 
 logindialog.ui负责登陆界面，下图为登陆页面
 
-<img src="images/image-20240902211639675.png" alt="image-20240902211639675" style="zoom: 50%;" />
+<img src="Images/image-20240902211639675.png" alt="image-20240902211639675" style="zoom: 50%;" />
 
 ### 注册界面
 
 registerdialog.ui负责注册页面，如下图
 
-<img src="images/image-20240902211742706.png" alt="image-20240902211742706" style="zoom: 67%;" />
+<img src="Images/image-20240902211742706.png" alt="image-20240902211742706" style="zoom: 67%;" />
 
 在注册类的构造函数里添加lineEdit的模式为密码模式
 
@@ -401,4 +401,4 @@ void RegisterDialog::initHttpHandlers()
 
 ### 流程图
 
-![image-20240904113417732](images/image-20240904113417732.png)
+![image-20240904113417732](Images/image-20240904113417732.png)
