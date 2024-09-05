@@ -1,4 +1,0 @@
-"G:\CLion 2024.2\bin\cmake\win\x64\bin\cmake.exe" -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_MAKE_PROGRAM=G:/CLion 2024.2/bin/ninja/win/x64/ninja.exe" -G Ninja -S D:\c_plus_plus\ProjectCombat\C++\Chatxt_server -B D:\c_plus_plus\ProjectCombat\C++\Chatxt_server\cmake-build-debug
--- Configuring done (0.5s)
--- Generating done (0.0s)
--- Build files have been written to: D:/c_plus_plus/ProjectCombat/C++/Chatxt_server/cmake-build-debug

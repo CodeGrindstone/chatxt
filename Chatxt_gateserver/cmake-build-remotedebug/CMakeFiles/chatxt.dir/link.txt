@@ -1,1 +1,0 @@
-/usr/bin/c++ -g CMakeFiles/chatxt.dir/main.cpp.o CMakeFiles/chatxt.dir/CServer/CServer.cpp.o -o chatxt 

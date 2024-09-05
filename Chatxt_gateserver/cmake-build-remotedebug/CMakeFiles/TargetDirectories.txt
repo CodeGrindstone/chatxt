@@ -1,3 +1,0 @@
-/home/itxt/chatxt_server/cmake-build-remotedebug/CMakeFiles/chatxt.dir
-/home/itxt/chatxt_server/cmake-build-remotedebug/CMakeFiles/edit_cache.dir
-/home/itxt/chatxt_server/cmake-build-remotedebug/CMakeFiles/rebuild_cache.dir

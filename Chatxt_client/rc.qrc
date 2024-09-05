@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>images/xt.png</file>
+        <file>style/stylesheet.qss</file>
+    </qresource>
+</RCC>

@@ -1,4 +1,0 @@
-/usr/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" -S /home/itxt/chatxt_server -B /home/itxt/chatxt_server/cmake-build-remotedebug
--- Configuring done
--- Generating done
--- Build files have been written to: /home/itxt/chatxt_server/cmake-build-remotedebug
