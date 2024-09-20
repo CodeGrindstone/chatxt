@@ -5,11 +5,13 @@
 #include "CServer/CServer.h"
 #include <iostream>
 
+#include "ConfigMgr/ConfigMgr.h"
 int main()
 {
+    std::string gate_port_str = ConfigMgr::getInstance()["GateServer"]["Port"];
     try
     {
-        unsigned short port = static_cast<unsigned short>(8080);
+        unsigned short port = atoi(gate_port_str.c_str());
         asio::io_context ioc{ 1 };
         boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
         signals.async_wait([&ioc](const boost::system::error_code& error, int signal_number) {

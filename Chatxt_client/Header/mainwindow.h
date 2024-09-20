@@ -21,11 +21,12 @@ public:
 
 public slots:
     void SlotSwitchReg();
+    void SlotSwitchLogin();
 
 private:
     Ui::MainWindow *ui;
     LoginDialog *m_login_dlg;
-    RegisterDialog* m_reg_dlg;
+    RegisterDialog *m_reg_dlg;
 
 };
 #endif // MAINWINDOW_H

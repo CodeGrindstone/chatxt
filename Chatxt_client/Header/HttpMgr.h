@@ -10,6 +10,7 @@
 #include <QJsonObject>
 #include "Singleton.h"
 #include "global.h"
+#include "registerdialog.h"
 
 class HttpMgr : public QObject, public Singleton<HttpMgr>, public std::enable_shared_from_this<HttpMgr>
 {
@@ -18,6 +19,7 @@ public:
     ~HttpMgr();
 private:
     friend class Singleton;
+    friend class RegisterDialog;
     HttpMgr();
     QNetworkAccessManager m_manager;
     void PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod); // 发送Http的post请求

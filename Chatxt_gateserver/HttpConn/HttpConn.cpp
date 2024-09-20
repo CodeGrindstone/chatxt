@@ -67,7 +67,7 @@ std::string UrlDecode(const std::string& str)
     return strTemp;
 }
 
-HttpConn::HttpConn(tcp::socket& socket):m_socket(std::move(socket))
+HttpConn::HttpConn(asio::io_service& service):m_io_service(service), m_socket(service)
 {
 }
 
@@ -140,12 +140,21 @@ void HttpConn::HandleReq()
             return;
         }
     }
-
-    m_response.result(http::status::ok);
-    m_response.set(http::field::server, "GateServer");
-    WriteResponse();
-    return;
-
+    else if(m_request.method() == http::verb::post)
+    {
+        bool success = LogicSystem::GetInstance()->HandlePost(m_request.target().to_string(), shared_from_this());
+        if (!success) {
+            m_response.result(http::status::not_found);
+            m_response.set(http::field::content_type, "text/plain");
+            beast::ostream(m_response.body()) << "url not found\r\n";
+            WriteResponse();
+            return;
+        }
+        m_response.result(http::status::ok);
+        m_response.set(http::field::server, "GateServer");
+        WriteResponse();
+        return;
+    }
 }
 
 void HttpConn::PreParseGetParam()

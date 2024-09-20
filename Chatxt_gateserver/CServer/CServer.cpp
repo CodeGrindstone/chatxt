@@ -17,7 +17,9 @@ CServer::CServer(asio::io_context& ioc, unsigned short port):m_ioc(ioc),
 void CServer::Start()
 {
     auto self = shared_from_this();
-    m_acceptor.async_accept(m_socket, [self](std::error_code ec)
+    auto& io_context = AsioIOServicePool::GetInstance()->getIOService();
+    std::shared_ptr<HttpConn> new_con = std::make_shared<HttpConn>(io_context);
+    m_acceptor.async_accept(new_con->m_socket, [self, new_con](std::error_code ec)
     {
        try
        {
@@ -27,8 +29,9 @@ void CServer::Start()
                self->Start();
                return;
            }
-           std::make_shared<HttpConn>(self->m_socket)->Start();
            //继续监听
+           new_con->Start();
+
            self->Start();
        }catch (std::exception& e)
        {

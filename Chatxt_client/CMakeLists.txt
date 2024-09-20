@@ -15,6 +15,7 @@ find_package(Qt6 COMPONENTS Network REQUIRED) # 网络库
 
 include_directories(HEADER)
 
+
 set(PROJECT_SOURCES
         ./Sources/main.cpp
         ./Sources/mainwindow.cpp
@@ -27,6 +28,8 @@ set(SOURCES
     Sources/registerdialog.cpp
     Sources/global.cpp
     Sources/HttpMgr.cpp
+    Sources/TimberBtn.cpp
+    Sources/ClickedLabel.cpp
 )
 
 set(HEADERS
@@ -35,6 +38,8 @@ set(HEADERS
     Header/global.h
     Header/Singleton.h
     Header/HttpMgr.h
+    Header/TimberBtn.h
+    Header/ClickedLabel.h
 )
 
 set(UIS
@@ -42,6 +47,9 @@ set(UIS
     UI/registerdialog.ui
 )
 
+set(CONFIG
+    config.ini
+)
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(Chatxt
         MANUAL_FINALIZATION
@@ -49,8 +57,11 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         ${HEADERS}
         ${SOURCES}
         ${UIS}
+        ${CONFIG}
         rc.qrc
     )
+
+
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET Chatxt APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
 #                 ${CMAKE_CURRENT_SOURCE_DIR}/android)

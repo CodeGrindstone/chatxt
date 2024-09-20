@@ -402,3 +402,454 @@ void RegisterDialog::initHttpHandlers()
 ### 流程图
 
 ![image-20240904113417732](Images/image-20240904113417732.png)
+
+## 利用beast搭建http server完成Get请求
+
+### CServer类
+
+CServer类构造函数接受一个端口号，创建acceptor接受新的到来的连接
+
+```c++
+class CServer : public std::enable_shared_from_this<CServer>
+{
+public:
+    CServer(asio::io_context& ioc, unsigned short port);
+    void Start();
+
+private:
+    asio::io_context& m_ioc;
+    tcp::acceptor m_acceptor;
+    tcp::socket m_socket;
+};
+```
+
+CServer构造函数如下
+
+```c++
+CServer::CServer(asio::io_context& ioc, unsigned short port):
+m_ioc(ioc),
+m_acceptor(ioc, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)),
+m_socket(ioc)
+{
+
+}
+```
+
+Start函数，用来监听新连接
+
+Start函数内创建HttpConn类的智能指针，将m_socket内部数据转移给HttpConn管理类，m_socket继续接受新的连接。
+
+```c++
+void CServer::Start()
+{
+    auto self = shared_from_this();
+    m_acceptor.async_accept(m_socket, [self](std::error_code ec)
+    {
+       try
+       {
+           //出错放弃连接
+           if (ec)
+           {
+               self->Start();
+               return;
+           }
+           std::make_shared<HttpConn>(self->m_socket)->Start();
+           //继续监听
+           self->Start();
+       }catch (std::exception& e)
+       {
+           std::cout << e.what() << std::endl;
+           return;
+       }
+    });
+}
+```
+
+### HttpConn类
+
+```c++
+class HttpConn : public std::enable_shared_from_this<HttpConn>
+{
+    friend class LogicSystem;
+public:
+    HttpConn(tcp::socket& m_socket);
+    void Start();
+private:
+    void CheckDeadline();		// 检查定时器是否超时
+    void WriteResponse();		// 写给客户端的回应
+    void HandleReq();			// 接收客户端的响应
+    void PreParseGetParam();	// 解析URL
+private:
+    tcp::socket m_socket;
+
+    beast::flat_buffer m_buffer{8192};  		  //用来接收数据
+    http::request<http::dynamic_body> m_request;  //用来解析请求
+    http::response<http::dynamic_body> m_response;//用来回应客户端
+    //用来做定时器判断请求是否超时
+    asio::steady_timer deadline_{
+        m_socket.get_executor(), std::chrono::seconds(60) };
+
+    std::string m_get_url;		// 解析后的URL
+    std::unordered_map<std::string, std::string> m_get_params;//解析后的URL键值对
+};
+```
+
+* HttpConn构造函数，==注意给m_socket赋值要用移动赋值==
+
+```c++
+HttpConn::HttpConn(tcp::socket& socket):m_socket(std::move(socket))
+{
+}
+```
+
+* async_read函数解析
+
+```c++
+boost::beast::http::async_read(
+    AsyncReadStream& stream,
+    DynamicBuffer& buffer,
+    message<isRequest, Body, basic_fields<Allocator>>& msg,
+    ReadHandler&& handler
+)
+    
+第一个参数为异步可读的数据流，可以理解为socket.
+
+第二个参数为一个buffer，用来存储接受的数据，因为http可接受文本，图像，音频等多种资源文件，所以是Dynamic动态类型的buffer。
+
+第三个参数是请求参数，我们一般也要传递能接受多种资源类型的请求参数。
+
+第四个参数为回调函数，接受成功或者失败，都会触发回调函数，我们用lambda表达式就可以了。
+```
+
+* Start函数
+
+```c++
+void HttpConn::Start()
+{
+    auto self(shared_from_this());
+    http::async_read(m_socket, m_buffer, m_request,
+        [self](beast::error_code ec, std::size_t bytes_transferred)
+        {
+           try
+           {
+               if(ec)
+               {
+                   std::cout << "http read err is " << ec.message() << std::endl;
+                   return;
+               }
+                // 处理读到的信息
+                boost::ignore_unused(bytes_transferred);
+                self->HandleReq();
+                self->CheckDeadline();
+           }catch (std::exception& e)
+           {
+               std::cout << "exception is " << e.what() << std::endl;
+           }
+        });
+}
+```
+
+* HandleReq
+
+```c++
+void HttpConn::HandleReq()
+{
+    //设置版本
+    m_response.version(m_request.version());
+    //设置为短连接
+    m_response.keep_alive(false);
+
+    if(m_request.method() == http::verb::get)
+    {
+        // 如果请求是get
+        PreParseGetParam();	// 解析url
+        bool success = LogicSystem::GetInstance()->HandleGet(m_get_url, shared_from_this());
+        if(!success)
+        {
+            m_response.result(http::status::not_found);
+            m_response.set(http::field::content_type, "text/plain");
+            beast::ostream(m_response.body()) << "url not found\r\n";
+            WriteResponse();
+            return;
+        }
+    }
+
+    m_response.result(http::status::ok);
+    m_response.set(http::field::server, "GateServer");
+    WriteResponse();
+    return;
+
+}
+```
+
+* WriteResponse函数，在回调函数里关闭发送端并取消定时器
+
+```c++
+void HttpConn::WriteResponse()
+{
+    auto self = shared_from_this();
+    m_response.content_length(m_response.body().size());
+
+    http::async_write(m_socket, m_response,
+        [self](boost::system::error_code ec, std::size_t){
+            self->m_socket.shutdown(tcp::socket::shutdown_send, ec);
+            self->deadline_.cancel();
+    });
+}
+```
+
+* 检测超时函数
+
+```c++
+void HttpConn::CheckDeadline()
+{
+    auto self(shared_from_this());
+
+    deadline_.async_wait([self](boost::system::error_code ec)
+    {
+        if(!ec)
+        {
+            self->m_socket.close(ec);
+        }
+    });
+}
+```
+
+
+
+### LogicSystem类，依旧用到了单例模式
+
+* m_post_handlers和m_get_handlers分别是post请求和get请求的回调函数map，key为路由，value为回调函数。
+
+```c++
+typedef std::function<void(std::shared_ptr<HttpConn>)> HttpHandler;
+class LogicSystem:public Singleton<LogicSystem>,
+public std::enable_shared_from_this<LogicSystem>
+{
+    friend class Singleton<LogicSystem>;
+public:
+    ~LogicSystem();
+    bool HandleGet(std::string url, std::shared_ptr<HttpConn> conn);
+    void RegGet(std::string, HttpHandler);
+private:
+    LogicSystem();
+
+private:
+    std::map<std::string, HttpHandler> m_PostHandlers;
+    std::map<std::string, HttpHandler> m_GetHandlers;
+};
+```
+
+* RegGet函数用来注册Get指定路由所指定的回调函数
+
+```c++
+void LogicSystem::RegGet(std::string url, HttpHandler handler)
+{
+    m_GetHandlers.insert(std::make_pair(url, handler));
+}
+```
+
+* 构造函数，实现具体的消息注册
+
+```c++
+LogicSystem::LogicSystem()
+{
+    RegGet("/get_test", [](std::shared_ptr<HttpConn> connection) {
+        beast::ostream(connection->m_response.body()) << "receiv eget_test req";
+        int i = 0;
+        for(auto& elem:connection->m_get_params)
+        {
+            i++;
+            beast::ostream(connection->m_response.body()) << "param " << i << " " << elem.first << " " << elem.second;
+        }
+    });
+
+}
+```
+
+* HandleGet函数，真正处理客户端请求的动作，此动作旨在逻辑类中完成，HttpConn只负责收发数据和调用逻辑类的HandleGet
+
+```c++
+bool LogicSystem::HandleGet(std::string url, std::shared_ptr<HttpConn> conn)
+{
+    if(m_GetHandlers.find(url) == m_GetHandlers.end())
+    {
+        return false;
+    }
+    m_GetHandlers[url](conn);
+    return true;
+}
+```
+
+### main函数
+
+在main函数中，初始化上下文iocontext以及启动信号监听ctrl-c退出事件
+
+```c++
+int main()
+{
+    try
+    {
+        unsigned short port = static_cast<unsigned short>(8080);
+        asio::io_context ioc{ 1 };
+        boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
+        signals.async_wait([&ioc](const boost::system::error_code& error, int signal_number) {
+            if (error) {
+                return;
+            }
+            ioc.stop();
+            });
+        std::make_shared<CServer>(ioc, port)->Start();
+        ioc.run();
+    }
+    catch (std::exception const& e)
+    {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
+}
+```
+
+## 处理post请求
+
+* 实现RegPost函数，用来注册post请求的函数
+
+```c++
+void LogicSystem::RegPost(std::string url, HttpHandler handler)
+{
+    m_PostHandlers.insert(std::make_pair(url, handler));
+}
+```
+
+* 在LogicSystem的构造函数里添加获取验证码的处理逻辑
+
+```c++
+RegPost("/get_varifycode", [](std::shared_ptr<HttpConn> connection)
+    {
+        auto body_str = beast::buffers_to_string(connection->m_request.body().data());
+        std::cout << "receive body is " << body_str << std::endl;
+        connection->m_response.set(http::field::content_type, "text/json");
+        Json::Value root;
+        Json::Reader reader;
+        Json::Value src_root;
+
+        bool parse_success = reader.parse(body_str, src_root);
+        if(!parse_success)
+        {
+            std::cout << "Failed to parse JSON data!" << std::endl;
+            root["error"] = ErrorCodes::Error_Json;
+            std::string jsonstr = root.toStyledString();
+            beast::ostream(connection->m_response.body()) << jsonstr;
+        }
+
+        auto email = src_root["email"].asString();
+        std::cout << "email is " << email << std::endl;
+        root["error"] = 0;
+        root["email"] = src_root["email"];
+        std::string jsonstr = root.toStyledString();
+        beast::ostream(connection->m_response.body()) << jsonstr;
+    });
+```
+
+* 在LogicSystem中添加Post请求的处理
+
+```c++
+bool LogicSystem::HandlePost(std::string url, std::shared_ptr<HttpConn> conn)
+{
+    if(m_PostHandlers.find(url) == m_PostHandlers.end())
+    {
+        return false;
+    }
+    m_PostHandlers[url](conn);
+    return true;
+}
+```
+
+* 在HttpConn类中的HandleReq中添加post请求处理
+
+```c++
+void HttpConnection::HandleReq() {
+    //省略...
+    if (_request.method() == http::verb::post) {
+        bool success = LogicSystem::GetInstance()->HandlePost(_request.target(), shared_from_this());
+        if (!success) {
+            _response.result(http::status::not_found);
+            _response.set(http::field::content_type, "text/plain");
+            beast::ostream(_response.body()) << "url not found\r\n";
+            WriteResponse();
+            return;
+        }
+        _response.result(http::status::ok);
+        _response.set(http::field::server, "GateServer");
+        WriteResponse();
+        return;
+    }
+}
+```
+
+### 客户端增加逻辑
+
+* 点击获取验证码的槽函数里添加发送http的post请求
+
+```c++
+void RegisterDialog::on_vafify_ptn_clicked()
+{
+    //验证邮箱的地址正则表达式
+    auto email = ui->emai_edit->text();
+    // 邮箱地址的正则表达式
+    QRegularExpression regex(R"((\w+)(\.|_)?(\w*)@(\w+)(\.(\w+))+)");
+    bool match = regex.match(email).hasMatch(); // 执行正则表达式匹配
+    if(match){
+        //发送http请求获取验证码
+        QJsonObject json_obj;
+        json_obj["email"] = email;
+        HttpMgr::GetInstance()->PostHttpReq(
+            QUrl(gate_url_prefix + "/get_varifycode"),
+            json_obj, ReqId::ID_GET_VARIFY_CODE, Modules::REGISTERMOD
+        );
+    }else{
+        //提示邮箱不正确
+        showTip(tr("邮箱地址不正确"), match);
+    }
+}
+```
+
+
+
+### 客户端管理配置
+
+在代码所在目录新建config.ini文件，内部添加配置
+
+```c++
+[GateServer]
+host=xxxx
+port=8080
+```
+
+* global.h中声明
+
+```c++
+extern QString gate_url_prefix;
+```
+
+* cpp中添加定义
+
+```c++
+QString gate_url_prefix = "";
+```
+
+* 在main函数中添加解析配置的逻辑
+
+```c++
+// 获取当前应用程序的路径
+QString app_path = QCoreApplication::applicationDirPath();
+// 拼接文件名
+QString fileName = "config.ini";
+QString config_path = QDir::toNativeSeparators(app_path +
+                        QDir::separator() + fileName);
+QSettings settings(config_path, QSettings::IniFormat);
+QString gate_host = settings.value("GateServer/host").toString();
+QString gate_port = settings.value("GateServer/port").toString();
+gate_url_prefix = "http://"+gate_host+":"+gate_port;
+```
+

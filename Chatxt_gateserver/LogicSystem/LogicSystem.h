@@ -7,6 +7,8 @@
 
 
 #include "Singleton.h"
+#include "../head.h"
+#include "../RedisMgr/RedisMgr.h"
 
 #include <map>
 #include <functional>
@@ -20,7 +22,9 @@ public std::enable_shared_from_this<LogicSystem>
 public:
     ~LogicSystem();
     bool HandleGet(std::string url, std::shared_ptr<HttpConn> conn);
+    bool HandlePost(std::string url, std::shared_ptr<HttpConn> conn);
     void RegGet(std::string, HttpHandler);
+    void RegPost(std::string, HttpHandler);
 private:
     LogicSystem();
 

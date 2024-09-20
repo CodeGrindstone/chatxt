@@ -6,6 +6,7 @@
 #define CSERVER_H
 
 #include "../head.h"
+#include "../AsioIOServicePool/AsioIOServicePool.h"
 
 class CServer : public std::enable_shared_from_this<CServer>
 {

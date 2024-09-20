@@ -9,11 +9,13 @@
 
 #include "../head.h"
 #include "../LogicSystem/LogicSystem.h"
+#include "../CServer/CServer.h"
 class HttpConn : public std::enable_shared_from_this<HttpConn>
 {
     friend class LogicSystem;
+    friend class CServer;
 public:
-    HttpConn(tcp::socket& m_socket);
+    HttpConn(asio::io_service& service);
     void Start();
 private:
     void CheckDeadline();
@@ -21,6 +23,7 @@ private:
     void HandleReq();
     void PreParseGetParam();
 private:
+    asio::io_service& m_io_service;
     tcp::socket m_socket;
 
     beast::flat_buffer m_buffer{8192};  //用来接收数据
